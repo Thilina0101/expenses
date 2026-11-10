@@ -40,7 +40,7 @@
   function defaultsDb() {
     return {
       v: 1,
-      settings: { name: 'My expenses', language: 'th', currency: '฿', vatRate: 7, pin: '', aiAuto: true },
+      settings: { name: 'My expenses', language: 'en', currency: '฿', vatRate: 7, pin: '', aiAuto: true, reader: 'auto' },
       categories: DEFAULT_CATS.map(([name, icon, color], i) => ({ id: 'c' + (i + 1), name, icon, color, budget: 0 })),
       expenses: [], recurring: [],
     };
@@ -219,10 +219,123 @@
   /** VAT included in a price: amount × rate / (100 + rate). */
   const vatIncluded = (amount, rate) => money(Number(amount) * Number(rate) / (100 + Number(rate)));
 
+  /* ---------------------------------------------------------------- free receipt reading (text from on-device OCR) */
+  const THAI_MONTHS = ['ม.ค', 'ก.พ', 'มี.ค', 'เม.ย', 'พ.ค', 'มิ.ย', 'ก.ค', 'ส.ค', 'ก.ย', 'ต.ค', 'พ.ย', 'ธ.ค'];
+  const THAI_MONTHS_LONG = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+  const EN_MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  /** Buddhist years (2569) and 2-digit years (69 = 2569, 26 = 2026) to a normal year. */
+  function fixYear(y) {
+    y = Number(y);
+    if (y >= 2400) return y - 543;
+    if (y < 100) return y >= 60 ? 2500 + y - 543 : 2000 + y;
+    return y;
+  }
+  function findDates(text) {
+    const out = [];
+    const push = (y, m, d) => { const s = `${fixYear(y)}-${pad(m)}-${pad(d)}`; if (validDate(s)) out.push(s); };
+    for (const m of text.matchAll(/\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/g)) push(m[1], m[2], m[3]);
+    for (const m of text.matchAll(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{4}|\d{2})\b/g)) {
+      let [d, mo] = [Number(m[1]), Number(m[2])];
+      if (mo > 12 && d <= 12) [d, mo] = [mo, d];        // written month first
+      push(m[3], mo, d);
+    }
+    const flat = text.replace(/(?<=[฀-๿.])\s+(?=[฀-๿.])/g, '');   // OCR puts spaces between Thai letters
+    THAI_MONTHS_LONG.forEach((name, i) => { for (const m of flat.matchAll(new RegExp(`(\\d{1,2})\\s*${name}\\s*(\\d{4}|\\d{2})`, 'g'))) push(m[2], i + 1, m[1]); });
+    THAI_MONTHS.forEach((name, i) => { for (const m of flat.matchAll(new RegExp(`(\\d{1,2})\\s*${name.replace('.', '\\.')}\\.?\\s*(\\d{4}|\\d{2})`, 'g'))) push(m[2], i + 1, m[1]); });
+    for (const m of text.matchAll(/\b(\d{1,2})[\s-]*([A-Za-z]{3})[a-z]*[\s,-]*(\d{4}|\d{2})\b/g)) { const i = EN_MONTHS.indexOf(m[2].toLowerCase()); if (i >= 0) push(m[3], i + 1, m[1]); }
+    for (const m of text.matchAll(/\b([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b/g)) { const i = EN_MONTHS.indexOf(m[1].toLowerCase()); if (i >= 0) push(m[3], i + 1, m[2]); }
+    return out;
+  }
+  /** Money amounts on one line (percentages, dates, times, phone and tax numbers left out). */
+  function lineAmounts(line) {
+    const s = line
+      .replace(/\d+(?:[.,]\d+)?\s*%/g, ' ')
+      .replace(/\b\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}\b/g, ' ')
+      .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, ' ');
+    const out = [];
+    for (const m of s.matchAll(/(?<![\d,.])(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?![\d,])/g)) {
+      const raw = m[1];
+      if (raw.replace(/[,.]/g, '').length > 8) continue;
+      const v = Number(raw.replace(/,/g, ''));
+      if (v > 0 && v < 10000000) out.push({ v, cents: /\.\d{2}$/.test(raw) });
+    }
+    return out;
+  }
+  const KW = {
+    grand: /grand ?total|net ?total|total ?due|amount ?due|balance ?due|รวมทั้งสิ้น|ยอดสุทธิ|ยอดชำระ|สุทธิ|จำนวนเงินรวม|รวมเงินทั้งสิ้น|ยอดรวมทั้งสิ้น/i,
+    total: /\btotal\b|\bamount\b|ยอดรวม|รวมเงิน|รวม|ทั้งหมด/i,
+    sub: /sub ?total|before ?vat|ก่อนภาษี|ไม่รวมภาษี|มูลค่าสินค้า/i,
+    skip: /change|cash ?tendered|tender|received|discount|saving|points?|ทอน|รับเงิน|ส่วนลด|แต้ม|qty|จำนวนชิ้น|ชิ้น|items?\b/i,
+    vat: /\bvat\b|ภาษีมูลค่าเพิ่ม|ภาษี/i,
+    merchantSkip: /tax|tel|phone|fax|receipt|invoice|date|time|pos|cashier|ใบเสร็จ|ใบกำกับ|โทร|เลขประจำตัว|วันที่|เวลา|สาขา|branch|www\.|http|@|ที่อยู่|address/i,
+  };
+  const CAT_WORDS = [
+    ['c8', /ptt|bangchak|shell|esso|caltex|susco|gasohol|diesel|benzine|fuel|ปตท|บางจาก|น้ำมัน|แก๊สโซฮอล์|ดีเซล|เบนซิน/i],
+    ['c3', /การไฟฟ้า|ไฟฟ้า|ประปา|electric|water ?works|\bpea\b|\bmea\b|\bpwa\b|\bmwa\b/i],
+    ['c6', /packaging|บรรจุภัณฑ์|กล่องอาหาร|ถุงพลาสติก|ถุงหิ้ว/i],
+    ['c1', /makro|แม็คโคร|lotus|โลตัส|big ?c|บิ๊กซี|tops|villa|market|ตลาด|ผัก|หมู|ไก่|ข้าวสาร|ซุปเปอร์|supermarket|food|อาหาร/i],
+    ['c9', /repair|ซ่อม|service ?center/i],
+  ];
+  /**
+   * Pull the shop, date, total, VAT and payment method out of OCR text, using simple rules.
+   * Returns the same shape as the AI reader so the form fills the same way.
+   */
+  function parseReceiptText(text, opts = {}) {
+    const todayStr = opts.today || dateStr(Date.now());
+    const norm = String(text || '').replace(/[๐-๙]/g, (c) => String(c.charCodeAt(0) - 0x0E50)).replace(/\r/g, '');
+    const lines = norm.split('\n').map((l) => l.replace(/[|_~^`]+/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const flatOf = (l) => l.replace(/(?<=[฀-๿])\s+(?=[฀-๿])/g, '');
+    // total: the number on (or just under) the strongest "total" line
+    let best = null;
+    lines.forEach((line, i) => {
+      const f = flatOf(line);
+      if (KW.skip.test(f) && !KW.grand.test(f)) return;
+      const rank = KW.grand.test(f) ? 3 : KW.sub.test(f) ? 1 : KW.vat.test(f) ? 0 : KW.total.test(f) ? 2 : 0;
+      if (!rank) return;
+      let nums = lineAmounts(line);
+      if (!nums.length && lines[i + 1] && !/[A-Za-z฀-๿]{3}/.test(lines[i + 1])) nums = lineAmounts(lines[i + 1]);
+      if (!nums.length) return;
+      const v = nums[nums.length - 1].v;
+      if (!best || rank > best.rank || (rank === best.rank && v > best.v)) best = { v, rank };
+    });
+    const all = lines.flatMap((l) => (KW.skip.test(flatOf(l)) ? [] : lineAmounts(l).filter((a) => a.cents)));
+    let total = best ? best.v : all.length ? Math.max(...all.map((a) => a.v)) : 0;
+    // VAT: an amount on a VAT line that is smaller than the total
+    let vat = 0;
+    for (const line of lines) {
+      const f = flatOf(line);
+      if (!KW.vat.test(f) || /เลขประจำตัว|tax ?id|tax ?no|taxid/i.test(f)) continue;
+      const v = lineAmounts(line).map((a) => a.v).filter((x) => x < total && x !== 7).pop();
+      if (v) vat = v;
+    }
+    if (vat && vat > total * 0.2) vat = 0;
+    // date: the first real date that isn't in the future (and not more than 2 years old)
+    const minDate = `${Number(todayStr.slice(0, 4)) - 2}${todayStr.slice(4)}`;
+    const date = findDates(lines.join('\n')).find((d) => d <= todayStr && d >= minDate) || '';
+    // shop: the first line near the top that looks like a name
+    let merchant = '';
+    for (const line of lines.slice(0, 6)) {
+      const f = flatOf(line);
+      const letters = (f.match(/[A-Za-z฀-๿]/g) || []).length;
+      if (letters >= 3 && letters / f.length > 0.5 && !KW.merchantSkip.test(f)) { merchant = clean(f.replace(/[^\p{L}\p{M}\p{N} &'.\-()]/gu, ''), 60); break; }
+    }
+    const flat = flatOf(lines.join(' '));
+    const payment_method = /promptpay|พร้อมเพย์|thai ?qr|qr ?pay/i.test(flat) ? 'promptpay'
+      : /visa|master ?card|credit|debit|card|บัตร|jcb|unionpay|amex/i.test(flat) ? 'card'
+      : /transfer|โอน/i.test(flat) ? 'transfer'
+      : /\bcash\b|เงินสด/i.test(flat) ? 'cash' : 'unknown';
+    const category = (CAT_WORDS.find(([, re]) => re.test(flat)) || [])[0] || '';
+    const found = !!total;
+    return {
+      is_receipt: found, merchant, date, total: money(total), vat: money(vat), currency: '', category, payment_method, items: [],
+      confidence: best && best.rank >= 2 && date ? 'medium' : 'low', notes: '', free: true,
+    };
+  }
+
   root.EX = {
     DB_KEY, METHODS, DEFAULT_NAMES, ExpenseError, msg, dateStr, validDate, monthOf, addMonths, daysInMonth, uid, money,
     defaultsDb, migrate, saveExpense, removeExpense, findDuplicate, filterExpenses, monthSummary, trend,
     saveCategory, removeCategory, matchCategory, saveRecurring, removeRecurring, recurringDue, addRecurring, skipRecurring,
-    receiptFileName, expensesCsv, exportData, importData, vatIncluded,
+    receiptFileName, expensesCsv, exportData, importData, vatIncluded, parseReceiptText, fixYear,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

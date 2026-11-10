@@ -93,10 +93,21 @@
     currency: ['Currency', 'สกุลเงิน', 'මුදල් ඒකකය'],
     vatRate: ['VAT %', 'VAT %', 'VAT %'],
     aiAuto: ['Read receipts automatically when a photo is added', 'อ่านใบเสร็จอัตโนมัติเมื่อเพิ่มรูป', 'ඡායාරූපයක් එක් කළ විට රිසිට්පත ස්වයංක්‍රීයව කියවන්න'],
-    aiOn: ['Receipt reading is on.', 'เปิดใช้การอ่านใบเสร็จแล้ว', 'රිසිට්පත් කියවීම සක්‍රියයි.'],
-    aiOff_file: ['Receipt reading is off: start the app with "npm start" and open http://localhost:8788 (see README).', 'ยังไม่เปิดการอ่านใบเสร็จ: เริ่มด้วย "npm start" แล้วเปิด http://localhost:8788 (ดู README)', 'රිසිට්පත් කියවීම අක්‍රියයි: "npm start" ආරම්භ කර http://localhost:8788 විවෘත කරන්න.'],
-    aiOff_noserver: ['Receipt reading is off: the server is not running (npm start).', 'ยังไม่เปิดการอ่านใบเสร็จ: เซิร์ฟเวอร์ไม่ได้ทำงาน (npm start)', 'රිසිට්පත් කියවීම අක්‍රියයි: සේවාදායකය ක්‍රියාත්මක නැත.'],
-    aiOff_nokey: ['Receipt reading is off: add ANTHROPIC_API_KEY to .env and restart.', 'ยังไม่เปิดการอ่านใบเสร็จ: ใส่ ANTHROPIC_API_KEY ในไฟล์ .env แล้วเริ่มใหม่', 'රිසිට්පත් කියවීම අක්‍රියයි: .env වෙත ANTHROPIC_API_KEY එක් කරන්න.'],
+    aiOn: ['Receipts are read by Claude AI.', 'ใบเสร็จอ่านด้วย Claude AI', 'රිසිට්පත් Claude AI මගින් කියවයි.'],
+    freeOn: ['Receipts are read for free on this device (less accurate, photos only).', 'อ่านใบเสร็จฟรีบนเครื่องนี้ (แม่นยำน้อยกว่า ใช้ได้กับรูปเท่านั้น)', 'රිසිට්පත් මෙම උපාංගයේ නොමිලේ කියවයි (නිරවද්‍යතාව අඩුයි, ඡායාරූප පමණි).'],
+    reader: ['Receipt reading', 'การอ่านใบเสร็จ', 'රිසිට්පත් කියවීම'],
+    reader_auto: ['Claude AI when available, otherwise free', 'ใช้ Claude AI ถ้ามี ไม่งั้นใช้แบบฟรี', 'ලබා ගත හැකි නම් Claude AI, නැතිනම් නොමිලේ'],
+    reader_free: ['Always free (on this device)', 'ฟรีเสมอ (บนเครื่องนี้)', 'සැමවිටම නොමිලේ (මෙම උපාංගයේ)'],
+    readFree: ['Read receipt (free)', 'อ่านใบเสร็จ (ฟรี)', 'රිසිට්පත කියවන්න (නොමිලේ)'],
+    ocrLoading: ['Getting the free reader ready… (the first time downloads a few MB)', 'กำลังเตรียมตัวอ่านฟรี… (ครั้งแรกจะดาวน์โหลดไม่กี่ MB)', 'නොමිලේ කියවනය සූදානම් කරමින්… (පළමු වරට MB කිහිපයක් බාගත වේ)'],
+    ocrReading: ['Reading the text… {p}%', 'กำลังอ่านข้อความ… {p}%', 'පෙළ කියවමින්… {p}%'],
+    freeFilled: ['Filled in by the free reader. It makes more mistakes, so check every box. Confidence:', 'กรอกโดยตัวอ่านฟรี อาจผิดพลาดได้มากกว่า กรุณาตรวจทุกช่อง ความมั่นใจ:', 'නොමිලේ කියවනය මගින් පුරවා ඇත. වැරදි වැඩි විය හැකි බැවින් සියල්ල පරීක්ෂා කරන්න. විශ්වාසය:'],
+    freeNothing: ["Couldn't find a total on this photo. Try a sharper, straight photo, or type it in.", 'หายอดรวมในรูปนี้ไม่เจอ ลองถ่ายให้ชัดและตรง หรือพิมพ์เอง', 'මෙම ඡායාරූපයේ එකතුව සොයාගත නොහැක. පැහැදිලි, සෘජු ඡායාරූපයක් ගන්න, නැතිනම් ටයිප් කරන්න.'],
+    e_ocrLoad: ["Couldn't load the free reader. It needs the internet the first time.", 'โหลดตัวอ่านฟรีไม่ได้ ครั้งแรกต้องต่ออินเทอร์เน็ต', 'නොමිලේ කියවනය පූරණය කළ නොහැක. පළමු වරට අන්තර්ජාලය අවශ්‍යයි.'],
+    e_ocrPdf: ['The free reader works on photos only, not PDFs.', 'ตัวอ่านฟรีใช้ได้กับรูปเท่านั้น ไม่รองรับ PDF', 'නොමිලේ කියවනය ඡායාරූප සඳහා පමණි, PDF සඳහා නොවේ.'],
+    aiOff_file: ['For Claude AI (more accurate): start the app with "npm start" and open http://localhost:8788 (see README).', 'ถ้าต้องการ Claude AI (แม่นยำกว่า): เริ่มด้วย "npm start" แล้วเปิด http://localhost:8788 (ดู README)', 'Claude AI සඳහා (වඩා නිවැරදි): "npm start" ආරම්භ කර http://localhost:8788 විවෘත කරන්න.'],
+    aiOff_noserver: ['For Claude AI: the server is not running (npm start).', 'ถ้าต้องการ Claude AI: เซิร์ฟเวอร์ไม่ได้ทำงาน (npm start)', 'Claude AI සඳහා: සේවාදායකය ක්‍රියාත්මක නැත (npm start).'],
+    aiOff_nokey: ['For Claude AI: add ANTHROPIC_API_KEY to .env and restart.', 'ถ้าต้องการ Claude AI: ใส่ ANTHROPIC_API_KEY ในไฟล์ .env แล้วเริ่มใหม่', 'Claude AI සඳහා: .env වෙත ANTHROPIC_API_KEY එක් කරන්න.'],
     pinLbl: ['PIN (4-8 digits, empty = no lock)', 'รหัส PIN (4-8 หลัก เว้นว่าง = ไม่ล็อก)', 'PIN (ඉලක්කම් 4-8, හිස් = අගුලක් නැත)'],
     e_pin: ['PIN must be 4 to 8 digits', 'PIN ต้องเป็นตัวเลข 4-8 หลัก', 'PIN ඉලක්කම් 4-8ක් විය යුතුය'],
     enterPin: ['PIN', 'รหัส PIN', 'PIN'],
@@ -158,7 +169,7 @@
     e_vat: ["VAT can't be more than the amount", 'VAT มากกว่าจำนวนเงินไม่ได้', 'VAT මුදලට වඩා වැඩි විය නොහැක'],
   };
 
-  let lang = 'th';
+  let lang = 'en';
   function setLang(l) { lang = LANGS.includes(l) ? l : 'en'; if (root.document) root.document.documentElement.lang = lang; return lang; }
   function t(key, vars) {
     const row = S[key];

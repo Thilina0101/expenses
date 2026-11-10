@@ -103,9 +103,12 @@
     catch { ai = { checked: true, on: false, reason: 'noserver' }; }
     return ai;
   }
-  async function readReceipt(id) {
+  /** Claude is used when the server has a key, unless Settings says to always use the free reader. */
+  const useClaude = () => ai.on && db.settings.reader !== 'free';
+  async function readReceipt(id, onProgress) {
     const rec = await S.get(id);
     if (!rec) throw new Error(t('e_noPhoto'));
+    if (!useClaude()) return readFree(rec, onProgress);
     const res = await fetch('api/receipt', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data: await blobToBase64(rec.blob), mediaType: rec.type, categories: db.categories.map(cname), today: today() }),
@@ -113,6 +116,33 @@
     const j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.error || t('e_aiFailed'));
     return j.receipt;
+  }
+
+  /* ---------------------------------------------------------------- free reading on this device (Tesseract OCR) */
+  const TESSERACT = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+  let ocrWorker = null, ocrProgress = null;
+  function loadScript(src) {
+    return new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = () => rej(new Error(t('e_ocrLoad'))); document.head.appendChild(el); });
+  }
+  async function getOcr() {
+    if (!ocrWorker) {
+      ocrWorker = (async () => {
+        if (!window.Tesseract) await loadScript(TESSERACT);
+        // English + Thai. The language files (a few MB) download once and are kept by the browser.
+        return window.Tesseract.createWorker(['eng', 'tha'], 1, { logger: (m) => ocrProgress && ocrProgress(m) });
+      })();
+      ocrWorker.catch(() => { ocrWorker = null; });
+    }
+    return ocrWorker;
+  }
+  async function readFree(rec, onProgress) {
+    if (!rec.type.startsWith('image/')) throw new Error(t('e_ocrPdf'));
+    ocrProgress = onProgress;
+    try {
+      const worker = await getOcr();
+      const { data } = await worker.recognize(rec.blob);
+      return X.parseReceiptText(data.text, { today: today() });
+    } finally { ocrProgress = null; }
   }
 
   /* ---------------------------------------------------------------- language, header, tabs */
@@ -173,7 +203,7 @@
     const drawRec = () => {
       $('efRec').innerHTML = st.receipts.map((id) => `<button type="button" class="recthumb" data-view="${id}"><img class="thumb big" data-rid="${id}" alt=""></button>`).join('')
         + `<label class="recadd">📷<span>${esc(st.receipts.length ? t('addPhoto') : t('addReceipt'))}</span><input type="file" id="efFile" accept="image/*,application/pdf" multiple hidden></label>`
-        + (st.receipts.length && ai.on ? `<button type="button" class="btn small" id="efRead">✨ ${esc(t('readReceipt'))}</button>` : '');
+        + (st.receipts.length ? `<button type="button" class="btn small" id="efRead">${useClaude() ? '✨' : '📝'} ${esc(t(useClaude() ? 'readReceipt' : 'readFree'))}</button>` : '');
       hydrateThumbs($('efRec'));
       $('efFile').onchange = async (e) => { await addFiles([...e.target.files]); e.target.value = ''; };
       if ($('efRead')) $('efRead').onclick = () => runAi(st.receipts[0], true);
@@ -186,25 +216,33 @@
         catch (err) { toast('⚠ ' + err.message, 5000); }
       }
       drawRec();
-      if (first && st.receipts.length && ai.on && db.settings.aiAuto && !$('efAmount').value) runAi(st.receipts[0], false);
+      if (first && st.receipts.length && db.settings.aiAuto && !$('efAmount').value) runAi(st.receipts[0], false);
     }
     async function runAi(id, manual) {
       if (st.busy) return;
       st.busy = true;
-      const box = $('efAi'); box.hidden = false; box.className = 'aibox busy'; box.textContent = '✨ ' + t('reading');
+      const box = $('efAi'); box.hidden = false; box.className = 'aibox busy'; box.textContent = (useClaude() ? '✨ ' : '📝 ') + t('reading');
+      const progress = (m) => {
+        if (!$('efAi')) return;
+        const pct = Math.round((m.progress || 0) * 100);
+        box.textContent = '📝 ' + (m.status === 'recognizing text' ? t('ocrReading', { p: pct }) : t('ocrLoading'));
+      };
       try {
-        const r = await readReceipt(id);
+        const r = await readReceipt(id, progress);
         if (!$('efForm')) return;                 // form was closed meanwhile
-        if (!r.is_receipt) { box.className = 'aibox warn'; box.textContent = '⚠ ' + t('notReceipt'); return; }
+        if (!r.is_receipt) { box.className = 'aibox warn'; box.textContent = '⚠ ' + t(r.free ? 'freeNothing' : 'notReceipt'); return; }
         const fill = (el, v) => { if (v && (manual || (!old && !$(el).dataset.touched) || !$(el).value)) { $(el).value = v; $(el).classList.add('ai'); } };
         fill('efAmount', r.total || ''); fill('efDate', r.date && r.date <= today() ? r.date : ''); fill('efPayee', r.merchant); fill('efVat', r.vat || '');
         if (!$('efNote').value && !$('efNote').dataset.touched && r.items.length) { $('efNote').value = r.items.map((i) => i.name).join(', ').slice(0, 200); $('efNote').classList.add('ai'); }
-        const c = (db.categories.find((x) => cname(x) === r.category) || {}).id || X.matchCategory(db, r.category);
+        const usual = r.merchant && db.expenses.slice().sort((a, b) => b.createdAt - a.createdAt).find((e) => e.payee.toLowerCase() === r.merchant.toLowerCase());
+        const c = r.free ? (usual?.category || (db.categories.some((x) => x.id === r.category) ? r.category : ''))
+          : (db.categories.find((x) => cname(x) === r.category) || {}).id || X.matchCategory(db, r.category);
         if (c && (manual || !st.category)) { st.category = c; drawCats(); document.querySelector(`#efCats [data-cat="${c}"]`)?.classList.add('ai'); }
         if (r.payment_method !== 'unknown' && X.METHODS.includes(r.payment_method)) { st.method = r.payment_method; drawMethod(); }
         st.ai = true;
         const cur = r.currency && db.settings.currency === '฿' && r.currency !== 'THB' ? ' ' + t('otherCurrency', { c: r.currency }) : '';
         box.className = 'aibox ' + (r.confidence === 'high' ? 'ok' : 'warn');
+        if (r.free) { box.innerHTML = `📝 ${esc(t('freeFilled'))} <b>${esc(t('conf_' + r.confidence))}</b>`; return; }
         box.innerHTML = `✨ ${esc(t('aiFilled'))} <b>${esc(t('conf_' + r.confidence))}</b>${r.notes ? ' · ' + esc(r.notes) : ''}${esc(cur)}${r.date && r.date > today() ? ' · ' + esc(t('aiFutureDate', { d: r.date })) : ''}`;
       } catch (err) {
         if ($('efAi')) { box.className = 'aibox warn'; box.textContent = '⚠ ' + err.message; }
@@ -231,7 +269,7 @@
     };
     drawCats(); drawMethod(); drawRec();
     if (!old && !st.receipts.length) setTimeout(() => $('efAmount')?.focus(), 30);
-    return { addFiles, runAi: () => st.receipts[0] && ai.on && db.settings.aiAuto && runAi(st.receipts[0], false) };
+    return { addFiles, runAi: () => st.receipts[0] && db.settings.aiAuto && !$('efAmount').value && runAi(st.receipts[0], false) };
   }
 
   /** Full-size receipt with rotate / download / remove. */
@@ -370,9 +408,9 @@
     if (!$('setForm').contains(document.activeElement)) {
       $('sName').value = s.name;
       $('sLang').innerHTML = I18N.LANGS.map((l) => `<option value="${l}">${I18N.LANG_NAMES[l]}</option>`).join(''); $('sLang').value = s.language;
-      $('sCur').value = s.currency; $('sVat').value = s.vatRate; $('sAi').checked = s.aiAuto; $('sPin').value = s.pin;
+      $('sCur').value = s.currency; $('sVat').value = s.vatRate; $('sAi').checked = s.aiAuto; $('sReader').value = s.reader === 'free' ? 'free' : 'auto'; $('sPin').value = s.pin;
     }
-    $('aiStatus').textContent = !ai.checked ? '' : ai.on ? '✨ ' + t('aiOn') : t('aiOff_' + ai.reason);
+    $('aiStatus').textContent = !ai.checked ? '' : useClaude() ? '✨ ' + t('aiOn') : '📝 ' + t('freeOn') + (ai.on ? '' : ' ' + t('aiOff_' + ai.reason));
     $('catList').innerHTML = db.categories.map((c) => `<div class="catrow" data-id="${c.id}">
       <input class="cIcon" value="${esc(c.icon)}" maxlength="4"><input class="cName" value="${esc(cname(c))}" maxlength="40">
       <input class="cColor" type="color" value="${esc(c.color)}"><input class="cBudget" type="number" min="0" step="100" value="${c.budget || ''}" placeholder="${esc(t('budget'))}">
@@ -397,7 +435,7 @@
     const pin = $('sPin').value.trim();
     if (pin && !/^\d{4,8}$/.test(pin)) { toast('⚠ ' + t('e_pin'), 4000); return; }
     Object.assign(db.settings, { name: $('sName').value.trim() || 'Expenses', language: $('sLang').value, currency: $('sCur').value.trim() || '฿',
-      vatRate: Math.min(50, Math.max(0, Number($('sVat').value) || 0)), aiAuto: $('sAi').checked, pin });
+      vatRate: Math.min(50, Math.max(0, Number($('sVat').value) || 0)), aiAuto: $('sAi').checked, reader: $('sReader').value, pin });
     if (pin) try { sessionStorage.setItem('ex_unlocked', '1'); } catch { /* ignore */ }
     save(); document.activeElement.blur(); applyLang(); renderAll(); toast(t('saved'));
   };

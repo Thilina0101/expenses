@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="th">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -73,6 +73,7 @@
             <label><span data-i18n="currency">Currency</span><input id="sCur" maxlength="4"></label>
             <label><span data-i18n="vatRate">VAT %</span><input id="sVat" type="number" min="0" max="50" step="0.1"></label>
           </div>
+          <label><span data-i18n="reader">Receipt reading</span><select id="sReader"><option value="auto" data-i18n="reader_auto">Claude AI when available, otherwise free</option><option value="free" data-i18n="reader_free">Always free (on this device)</option></select></label>
           <label class="check"><input type="checkbox" id="sAi"> <span data-i18n="aiAuto">Read receipts automatically when a photo is added</span></label>
           <p class="muted" id="aiStatus"></p>
           <label><span data-i18n="pinLbl">PIN (4-8 digits, empty = no lock)</span><input id="sPin" inputmode="numeric" maxlength="8" autocomplete="off"></label>

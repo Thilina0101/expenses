@@ -3,13 +3,18 @@
 Track what your shop (or household) spends. Snap a photo of each receipt and **AI reads it for you**: the shop
 name, date, total, VAT, category and payment method are filled in, and you just check and save.
 Monthly budgets, monthly bills (rent, electricity), charts, and an export for your accountant **with all the receipt
-photos**. In English, Thai and Sinhala.
+photos**. In English (the default), Thai and Sinhala.
+
+Receipt reading works **for free** on your device, or more accurately with Claude AI if you add an API key.
 
 ## What it does
 
 - **📷 Snap a receipt** with the phone camera, or choose photos/PDFs, drag them onto the window, or paste a screenshot.
   Several pages per expense are fine. Photos are shrunk to save space; tap one to zoom, rotate or download it.
-- **✨ Read receipt (AI)** fills in the form from the photo. Filled fields turn purple so you know what to check,
+- **📝 Free receipt reading** works with no key and no server. Text is read on your device (English + Thai) and simple rules pick out
+  the shop, date, total, VAT and payment method. It is less accurate than Claude, works on photos only (not PDFs), and the
+  first use downloads a few MB that the browser then keeps. Clear, straight photos work best.
+- **✨ Read receipt (Claude AI)** fills in the form from the photo. Filled fields turn purple so you know what to check,
   along with how confident the AI is. It never saves by itself, and it won't overwrite anything you've typed.
   It understands Thai receipts with Buddhist-year dates (2569 → 2026).
 - **Quick manual entry**: amount, date, category, who you paid, how you paid (cash, card, transfer, PromptPay),
@@ -26,9 +31,9 @@ photos**. In English, Thai and Sinhala.
 ## Start
 
 ### Without AI (simplest)
-Open `index.html` in Chrome or Edge. Everything works except ✨ Read receipt.
+Open `index.html` in Chrome or Edge. Everything works, including 📝 free receipt reading.
 
-### With AI receipt reading
+### With Claude AI receipt reading (more accurate, paid)
 1. Install [Node.js](https://nodejs.org) 20.12 or newer.
 2. In this folder:
    ```
@@ -38,7 +43,8 @@ Open `index.html` in Chrome or Edge. Everything works except ✨ Read receipt.
 3. Put your Anthropic API key in `.env` after `ANTHROPIC_API_KEY=` (from https://console.anthropic.com).
 4. Run `npm start` and open **http://localhost:8788**.
 
-Reading one receipt costs roughly ฿0.3–1 in API fees. The server only listens on this computer and refuses
+Reading one receipt costs roughly ฿0.3–1 in API fees (less with `EXPENSES_MODEL=claude-haiku-5-5` in `.env`).
+To keep using the free reader even with a key, choose **Settings → Receipt reading → Always free**. The server only listens on this computer and refuses
 requests from other websites, so nobody else can use your key.
 
 Data is stored per address: what you enter at `http://localhost:8788` is separate from what you enter when opening
@@ -47,15 +53,15 @@ Data is stored per address: what you enter at `http://localhost:8788` is separat
 ## Using it on your phone
 
 The camera button works best on a phone. Two options:
-- **Easiest, no AI**: put this folder on GitHub Pages (Settings → Pages) and open that address on the phone.
+- **Easiest, free reading**: put this folder on GitHub Pages (Settings → Pages) and open that address on the phone.
   The data stays on the phone.
 - **With AI on the shop's Wi-Fi**: run the server with `HOST=0.0.0.0` in `.env` and open `http://<computer's IP>:8788` on the phone.
   Only do this on a private network you trust, because anyone on that Wi-Fi could then use your API key through the app.
 
 ## Your data
 
-- Expenses and receipt photos stay **in this browser on this device**. Only the photo you choose to "read" is sent
-  to the AI (Anthropic) to be read, and it isn't stored in the app's server.
+- Expenses and receipt photos stay **in this browser on this device**. The free reader never sends photos anywhere.
+  With Claude AI, only the photo you read is sent to Anthropic to be read, and it isn't stored in the app's server.
 - **Make a backup every month** (Settings → Backup). It includes all photos. Clearing the browser's site data deletes everything.
 - The app asks the browser to keep its storage permanently, and Settings shows how much space the photos use.
 - The PIN keeps casual eyes out; it is not encryption.
