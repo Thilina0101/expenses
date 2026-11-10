@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>Expenses</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f766e'/%3E%3Cpath d='M18 10h28v44l-5-4-5 4-4-4-4 4-5-4-5 4z' fill='white'/%3E%3Cpath d='M24 22h16M24 30h16M24 38h10' stroke='%230f766e' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">🧾</span><b id="appName">Expenses</b></div>
+  <nav id="tabs">
+    <button data-tab="overview" class="on" data-i18n="tabOverview">Overview</button>
+    <button data-tab="list" data-i18n="tabList">Expenses</button>
+    <button data-tab="settings" data-i18n="tabSettings">Settings</button>
+  </nav>
+  <button class="btn ghost" id="lockBtn" hidden>🔒</button>
+</header>
+
+<main>
+  <!-- ============ OVERVIEW ============ -->
+  <section id="tab-overview" class="tab on">
+    <div class="bar">
+      <button class="btn" id="ovPrev">◀</button>
+      <b id="ovMonth" class="month"></b>
+      <button class="btn" id="ovNext">▶</button>
+    </div>
+    <div id="ovDue"></div>
+    <div class="hero panel">
+      <div><small data-i18n="spentThisMonth">Spent this month</small><b id="ovTotal"></b><small id="ovCompare"></small></div>
+      <div id="ovBudget" class="budgetbar"></div>
+    </div>
+    <div id="ovAlerts"></div>
+    <div class="cols2">
+      <div class="panel"><h3 data-i18n="byCategory">By category</h3><div id="ovCats" class="catbars"></div></div>
+      <div>
+        <div class="panel"><h3 data-i18n="byDay">By day</h3><div id="ovDays" class="daybars"></div></div>
+        <div class="panel"><h3 data-i18n="last6">Last 6 months</h3><div id="ovTrend" class="trend"></div></div>
+        <div class="panel"><h3 data-i18n="biggest">Biggest expenses</h3><div id="ovBig" class="list"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LIST ============ -->
+  <section id="tab-list" class="tab">
+    <div class="bar filters">
+      <select id="fMonth"></select>
+      <select id="fCat"></select>
+      <select id="fMethod"></select>
+      <input id="fQ" class="grow" autocomplete="off" data-i18n-ph="searchPh">
+      <label class="check"><input type="checkbox" id="fNoRec"> <span data-i18n="noReceiptOnly">No receipt</span></label>
+    </div>
+    <div class="bar">
+      <b id="fTotal"></b><span class="grow"></span>
+      <button class="btn" id="exCsv">⬇ CSV</button>
+      <button class="btn" id="exZip">⬇ <span data-i18n="zipWithReceipts">ZIP with receipts</span></button>
+    </div>
+    <div id="list" class="daylist"></div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section id="tab-settings" class="tab">
+    <div class="cols2">
+      <div>
+        <form class="panel" id="setForm">
+          <h3 data-i18n="general">General</h3>
+          <label><span data-i18n="nameLbl">Name (shop or household)</span><input id="sName" maxlength="60"></label>
+          <div class="grid3">
+            <label><span data-i18n="language">Language</span><select id="sLang"></select></label>
+            <label><span data-i18n="currency">Currency</span><input id="sCur" maxlength="4"></label>
+            <label><span data-i18n="vatRate">VAT %</span><input id="sVat" type="number" min="0" max="50" step="0.1"></label>
+          </div>
+          <label class="check"><input type="checkbox" id="sAi"> <span data-i18n="aiAuto">Read receipts automatically when a photo is added</span></label>
+          <p class="muted" id="aiStatus"></p>
+          <label><span data-i18n="pinLbl">PIN (4-8 digits, empty = no lock)</span><input id="sPin" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+          <button class="btn primary" data-i18n="save">Save</button>
+        </form>
+        <div class="panel">
+          <h3 data-i18n="bills">Monthly bills</h3>
+          <p class="muted" data-i18n="billsHelp">Rent, electricity, internet, wages… On the day each is due, the Overview asks you to add it (you can change the amount first).</p>
+          <div id="billList" class="list"></div>
+          <button class="btn" id="billAdd" data-i18n="addBill">＋ Add monthly bill</button>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h3 data-i18n="categories">Categories & monthly budgets</h3>
+          <div id="catList" class="list"></div>
+          <button class="btn" id="catAdd" data-i18n="addCategory">＋ Add category</button>
+        </div>
+        <div class="panel">
+          <h3 data-i18n="dataTitle">Data</h3>
+          <p class="muted" id="dataInfo"></p>
+          <div class="btnrow">
+            <button class="btn" id="bkExport">⬇ <span data-i18n="backup">Backup (with photos)</span></button>
+            <label class="btn">⬆ <span data-i18n="restore">Restore</span><input type="file" id="bkImport" accept=".zip,.json,application/zip,application/json" hidden></label>
+            <button class="btn danger" id="bkErase" data-i18n="eraseAll">Erase everything</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="fab">
+  <label class="btn primary round" data-i18n-title="snapTitle">📷<input type="file" id="snap" accept="image/*,application/pdf" capture="environment" hidden></label>
+  <button class="btn primary wide" id="addBtn">＋ <span data-i18n="addExpense">Add expense</span></button>
+</div>
+
+<div class="modal" id="modal" hidden><div class="mbox"><button class="mclose" id="mClose">✕</button><div id="mBody"></div></div></div>
+<div class="lock" id="lock" hidden>
+  <form id="lockForm" class="mbox small">
+    <div class="logo big">🧾</div>
+    <h2 id="lockName"></h2>
+    <input id="lockPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" data-i18n-ph="enterPin">
+    <button class="btn primary big" data-i18n="unlock">Unlock</button>
+    <p class="err" id="lockErr"></p>
+  </form>
+</div>
+<div id="drop" class="drop" hidden><div data-i18n="dropHere">Drop receipts here</div></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="i18n.js"></script>
+<script src="core.js"></script>
+<script src="store.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "expense-tracker",
+  "version": "1.0.0",
+  "description": "Expense tracker with receipt photos, budgets and AI receipt reading by Claude",
+  "type": "module",
+  "scripts": { "start": "node server.mjs" },
+  "engines": { "node": ">=20.12" },
+  "license": "MIT",
+  "dependencies": { "@anthropic-ai/sdk": "^1.6.0" }
+}
